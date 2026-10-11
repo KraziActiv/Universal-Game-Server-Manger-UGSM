@@ -222,7 +222,7 @@ function Get-UGSMGameKillingFloor2SupportedFeatures {
         Stop                      = $true
         Profiles                  = $true
         InstanceUi                = $true
-        Bootstrap                 = $false
+        Bootstrap                 = $true
         # Show this game in the catalog. Release/test/dev exclusion is handled by build scripts.
         IsVisible                 = $true
         Rcon                      = $false
@@ -1151,10 +1151,24 @@ function Ensure-UGSMGameKillingFloor2KillingFloor2 {
     }
 
     $sourceConfigRoot = [string]$definition.ConfigRootPath
+    $missingConfigs = @('PCServer-KFGame.ini', 'PCServer-KFEngine.ini', 'KFWeb.ini') | Where-Object { 
+        -not (Test-Path -LiteralPath (Join-Path $sourceConfigRoot $_) -PathType Leaf) 
+    }
+
+    if ($missingConfigs.Count -gt 0 -or $ForceRefresh) {
+        # Use the correct root install path directly, just like SCUM
+        $workingDir = $definition.InstallPath
+        
+        Start-UGSMGameKillingFloor2BootstrapProcess `
+            -ServerExecutablePath $definition.ServerExecutablePath `
+            -WorkingDirectory $workingDir `
+            -BootstrapSeconds $BootstrapSeconds | Out-Null
+    }
+
     foreach ($fileName in @('PCServer-KFGame.ini', 'PCServer-KFEngine.ini', 'KFWeb.ini')) {
-        $path = Join-Path $sourceConfigRoot $fileName
+        $path = Join-Path $sourceConfigRoot$fileName
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
-            throw "Killing Floor 2 config file was not found. Run the server once from the Steam folder first, then create the UGSM profile. Missing: $path"
+            throw "Killing Floor 2 config file was not found. Missing: $path"
         }
     }
 
