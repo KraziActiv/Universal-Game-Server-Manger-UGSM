@@ -1133,7 +1133,7 @@ function Start-UGSMGameKillingFloor2BootstrapProcess {
     }
 }
 
-function Ensure-UGSMGameKillingFloor2KillingFloor2 {
+function Ensure-UGSMGameKillingFloor2Template {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
@@ -1155,18 +1155,23 @@ function Ensure-UGSMGameKillingFloor2KillingFloor2 {
         -not (Test-Path -LiteralPath (Join-Path $sourceConfigRoot $_) -PathType Leaf) 
     }
 
+    $bootstrapResult = $null
+
     if ($missingConfigs.Count -gt 0 -or $ForceRefresh) {
-        # Use the correct root install path directly, just like SCUM
-        $workingDir = $definition.InstallPath
-        
-        Start-UGSMGameKillingFloor2BootstrapProcess `
-            -ServerExecutablePath $definition.ServerExecutablePath `
-            -WorkingDirectory $workingDir `
-            -BootstrapSeconds $BootstrapSeconds | Out-Null
+    $workingDir = $definition.InstallPath
+
+    $bootstrapResult = Start-UGSMGameKillingFloor2BootstrapProcess `
+        -ServerExecutablePath $definition.ServerExecutablePath `
+        -WorkingDirectory $workingDir `
+        -BootstrapSeconds $BootstrapSeconds
+
+    if ($bootstrapResult -and $bootstrapResult.PSObject.Properties['Exited'] -and -not [bool]$bootstrapResult.Exited) {
+        throw ('Killing Floor 2 bootstrap server did not shut down cleanly. Remaining PIDs: {0}' -f (($bootstrapResult.RemainingPids -join ', ')))
     }
+}
 
     foreach ($fileName in @('PCServer-KFGame.ini', 'PCServer-KFEngine.ini', 'KFWeb.ini')) {
-        $path = Join-Path $sourceConfigRoot$fileName
+        $path = Join-Path $sourceConfigRoot $fileName
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
             throw "Killing Floor 2 config file was not found. Missing: $path"
         }
