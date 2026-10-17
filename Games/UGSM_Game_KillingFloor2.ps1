@@ -1870,7 +1870,7 @@ function Register-UGSMGameKillingFloor2Module {
             GetMetadata         = 'Get-UGSMGameKillingFloor2Metadata'
             TestInstall         = 'Test-UGSMGameKillingFloor2Install'
             TestInstance        = 'Test-UGSMGameKillingFloor2Instance'
-            EnsureKillingFloor2 = 'Ensure-UGSMGameKillingFloor2KillingFloor2'
+            EnsureKillingFloor2 = 'Ensure-UGSMGameKillingFloor2Template'
             InitializeProfile   = 'Initialize-UGSMGameKillingFloor2Profile'
             Start               = 'Start-UGSMGameKillingFloor2Instance'
             Stop                = 'Stop-UGSMGameKillingFloor2Instance'
