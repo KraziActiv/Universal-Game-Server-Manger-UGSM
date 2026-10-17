@@ -1,0 +1,14 @@
+Release-Test/UGSM.exe
+Build-Release.ps1
+Build-Test.ps1
+meta.json
+KA.ico
+release_history.txt
+Release/UGSM_PortabilityScan.txt
+Release/UGSM_Full.ps1
+Release/UGSM_20260611_085944.zip
+Release/UGSM_20260611_072633.zip
+*.zip
+*.exe
+*.txt
+Release-Test/UGSM_Full.ps1
