@@ -439,8 +439,18 @@ function Get-UGSMGameKillingFloor2Metadata {
         SaveRootRelative         = 'KFGame\SaveData'
         LogRootRelative          = 'KFGame\Logs'
 
-        RequiredFiles            = @('Binaries\Win64\KFServer.exe', 'KFGame\Config')
-        InstallMarkers           = @('Binaries\Win64', 'KFGame\Config')
+        #RequiredFiles            = @('Binaries\Win64\KFServer.exe', 'KFGame\Config')
+
+        RequiredFiles            = @(
+            $serverExeRelativePath
+            'KFGame\Config'
+        )
+
+        #InstallMarkers           = @('Binaries\Win64', 'KFGame\Config')
+
+        InstallMarkers           = @(
+            $serverExeRelativePath
+        )
 
         PortSchema               = @(
             @{ Name = 'GamePort'; Protocol = 'UDP'; PreferredStart = 7777 }
@@ -753,22 +763,21 @@ function Get-UGSMGameKillingFloor2RuntimeDefinition {
     )
 
     $runtimeRoot = Get-UGSMGameKillingFloor2RuntimeRoot -Instance $Instance
-    $runtimeInstallRoot = Join-Path $runtimeRoot 'Install'
-    $runtimeGameRoot = Join-Path $runtimeInstallRoot 'KillingFloor2'
-    $runtimeSavedRoot = Join-Path $runtimeGameRoot 'Saved'
+    $runtimeInstallRoot = $runtimeRoot
+    $runtimeGameRoot = Join-Path $runtimeRoot 'KFGame' # Make sure this matches KFGame structure
+    $runtimeSavedRoot = Join-Path $runtimeRoot 'KFGame\SaveData' # Or appropriate saved path
 
     return [pscustomobject]@{
         RuntimeRoot           = $runtimeRoot
         RuntimeInstallRoot    = $runtimeInstallRoot
         RuntimeGameRoot       = $runtimeGameRoot
         RuntimeSavedRoot      = $runtimeSavedRoot
-        RuntimeConfigRootPath = Join-Path $runtimeSavedRoot 'Config\WindowsServer'
-        RuntimeSaveRootPath   = Join-Path $runtimeSavedRoot 'SaveFiles'
-        RuntimeLogRootPath    = Join-Path $runtimeSavedRoot 'Logs'
-        RuntimeServerExePath  = Join-Path $runtimeInstallRoot 'KillingFloor2\Binaries\Win64\KillingFloor2Server.exe'
+        RuntimeConfigRootPath = Join-Path $InstallPath 'KFGame\Config'
+        RuntimeSaveRootPath   = Join-Path $runtimeRoot 'KFGame\SaveData'
+        RuntimeLogRootPath    = Join-Path $runtimeRoot 'KFGame\Logs'
+        RuntimeServerExePath  = Join-Path $InstallPath 'Binaries\Win64\KFServer.exe'
         SharedInstallPath     = [string]$InstallDefinition.InstallPath
-        SharedGameRoot        = Join-Path ([string]$InstallDefinition.InstallPath) 'KillingFloor2'
-
+        SharedGameRoot        = Join-Path ([string]$InstallDefinition.InstallPath) 'KFGame'
     }
 }
 
@@ -976,7 +985,7 @@ function Get-UGSMGameKillingFloor2RunningBootstrapProcesses {
 
     $matches = @()
     try {
-        $matches = @(Get-CimInstance Win32_Process -Filter "Name = 'KillingFloor2Server.exe'" -ErrorAction Stop)
+        $matches = @(Get-CimInstance Win32_Process -Filter "Name = 'KFServer.exe'" -ErrorAction Stop)
     }
     catch {
         $matches = @()
@@ -1095,7 +1104,7 @@ function Start-UGSMGameKillingFloor2BootstrapProcess {
 
     Start-Sleep -Seconds 2
 
-    $remaining = @(Get-Process -Name 'KillingFloor2Server' -ErrorAction SilentlyContinue)
+    $remaining = @(Get-Process -Name 'KillingFloor2DedicatedServer' -ErrorAction SilentlyContinue)
 
     if ($remaining.Count -gt 0) {
 
@@ -1104,7 +1113,7 @@ function Start-UGSMGameKillingFloor2BootstrapProcess {
 
         Start-Sleep -Seconds 2
 
-        $remaining = @(Get-Process -Name 'KillingFloor2Server' -ErrorAction SilentlyContinue)
+        $remaining = @(Get-Process -Name 'KillingFloor2DedicatedServer' -ErrorAction SilentlyContinue)
         foreach ($p in $remaining) {
             try {
                 Stop-Process -Id $p.Id -Force -ErrorAction Stop
@@ -1116,7 +1125,7 @@ function Start-UGSMGameKillingFloor2BootstrapProcess {
 
     Start-Sleep -Seconds 2
 
-    $remainingFinal = @(Get-Process -Name 'KillingFloor2Server' -ErrorAction SilentlyContinue)
+    $remainingFinal = @(Get-Process -Name 'KillingFloor2DedicatedServer' -ErrorAction SilentlyContinue)
 
     if ($remainingFinal.Count -gt 0) {
     }
@@ -1160,10 +1169,12 @@ function Ensure-UGSMGameKillingFloor2Template {
     if ($missingConfigs.Count -gt 0 -or $ForceRefresh) {
     $workingDir = $definition.InstallPath
 
+    Start-Sleep -Seconds 5
+
     $bootstrapResult = Start-UGSMGameKillingFloor2BootstrapProcess `
         -ServerExecutablePath $definition.ServerExecutablePath `
         -WorkingDirectory $workingDir `
-        -BootstrapSeconds $BootstrapSeconds
+        -BootstrapSeconds $BootstrapSeconds | Out-Null
 
     if ($bootstrapResult -and $bootstrapResult.PSObject.Properties['Exited'] -and -not [bool]$bootstrapResult.Exited) {
         throw ('Killing Floor 2 bootstrap server did not shut down cleanly. Remaining PIDs: {0}' -f (($bootstrapResult.RemainingPids -join ', ')))
@@ -1185,6 +1196,7 @@ function Ensure-UGSMGameKillingFloor2Template {
     }
 }
 
+
 function Initialize-UGSMGameKillingFloor2Profile {
     [CmdletBinding(DefaultParameterSetName = 'ByInstance')]
     param(
@@ -1199,7 +1211,7 @@ function Initialize-UGSMGameKillingFloor2Profile {
 
         [switch]$Force,
 
-        [int]$BootstrapSeconds = 30
+        [int]$BootstrapSeconds = 15
     )
 
     $effectiveProfileName = ''
@@ -1228,6 +1240,28 @@ function Initialize-UGSMGameKillingFloor2Profile {
 
     $definition = Get-UGSMGameKillingFloor2InstallDefinition -InstallPath $effectiveInstallPath
     $sourceConfigRoot = [string]$definition.ConfigRootPath
+
+
+
+
+    
+    # Check if source configs exist; if not, invoke the template builder (bootstrap) like SCUM does
+    $missingConfigs = @('PCServer-KFGame.ini', 'PCServer-KFEngine.ini', 'KFWeb.ini') | Where-Object { 
+        -not (Test-Path -LiteralPath (Join-Path $sourceConfigRoot $_) -PathType Leaf) 
+    }
+
+    if ($missingConfigs.Count -gt 0) {
+        Write-Host "Killing Floor 2 base configs missing. Running initial bootstrap to generate INI files..."
+        Ensure-UGSMGameKillingFloor2Template -InstallPath $effectiveInstallPath -BootstrapSeconds $BootstrapSeconds | Out-Null
+    }
+
+    # Proceed with profile root creation and file copying...
+    $profileRoot = Get-UGSMGameKillingFloor2ProfileRoot -ProfileName $effectiveProfileName
+
+
+
+
+
     foreach ($fileName in @('PCServer-KFGame.ini', 'PCServer-KFEngine.ini', 'KFWeb.ini')) {
         $sourcePath = Join-Path $sourceConfigRoot $fileName
         if (-not (Test-Path -LiteralPath $sourcePath -PathType Leaf)) {
